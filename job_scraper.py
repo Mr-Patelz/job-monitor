@@ -94,7 +94,7 @@ receiver = os.environ["EMAIL_USER"]
 
 msg = MIMEText(html_table, "html")
 
-msg["Subject"] = "Daily GCP/Data Engineer Jobs"
+msg["Subject"] = "MNC Daily GCP/Data Engineer Jobs"
 msg["From"] = sender
 msg["To"] = receiver
 
