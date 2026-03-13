@@ -5,20 +5,12 @@ from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 import os
+import re
 
 KEYWORDS = [
     "gcp data engineer",
     "data engineer",
     "gcp developer"
-]
-
-LOCATIONS = [
-    "india",
-    "hyderabad",
-    "bangalore",
-    "bengaluru",
-    "pune",
-    "chennai"
 ]
 
 companies = {
@@ -37,22 +29,41 @@ results = []
 visited_links = set()
 
 today = datetime.now()
-yesterday = today - timedelta(days=1)
+seven_days_ago = today - timedelta(days=7)
 
-def match_keywords(title):
+
+def keyword_match(title):
     title = title.lower()
     return any(k in title for k in KEYWORDS)
 
+
+def parse_posted_days(text):
+    """
+    Extract 'X days ago' from job text
+    """
+    match = re.search(r'(\d+)\s+day', text.lower())
+    if match:
+        days = int(match.group(1))
+        return today - timedelta(days=days)
+
+    if "today" in text.lower():
+        return today
+
+    return None
+
+
 def scrape_company(company, url):
+
     try:
+
         response = requests.get(url, timeout=20)
+
         soup = BeautifulSoup(response.text, "html.parser")
 
-        links = soup.find_all("a")
-
-        for link in links:
+        for link in soup.find_all("a"):
 
             title = link.text.strip()
+
             href = link.get("href")
 
             if not title or not href:
@@ -61,25 +72,30 @@ def scrape_company(company, url):
             if href in visited_links:
                 continue
 
-            if match_keywords(title):
+            if keyword_match(title):
+
+                posted_date = parse_posted_days(title)
+
+                if posted_date and posted_date < seven_days_ago:
+                    continue
 
                 visited_links.add(href)
 
                 results.append({
-                    "POSTED DATE": today.strftime("%Y-%m-%d"),
+                    "POSTED DATE": posted_date.strftime("%Y-%m-%d") if posted_date else "Recent",
                     "COMPANY": company,
                     "ROLE": title,
-                    "LOCATION": "Check JD",
-                    "EXPERIENCE": "Check JD",
                     "LINK": href
                 })
 
     except Exception as e:
+
         print(company, "error:", e)
 
 
 for company, url in companies.items():
     scrape_company(company, url)
+
 
 df = pd.DataFrame(results)
 
@@ -94,9 +110,10 @@ receiver = os.environ["EMAIL_USER"]
 
 msg = MIMEText(html_table, "html")
 
-msg["Subject"] = "MNC Daily GCP/Data Engineer Jobs"
+msg["Subject"] = "Last 7 Days – MNC GCP/Data Engineer Jobs"
 msg["From"] = sender
 msg["To"] = receiver
+
 
 server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
 
@@ -106,4 +123,4 @@ server.sendmail(sender, receiver, msg.as_string())
 
 server.quit()
 
-print("Job report email sent")
+print("Email sent successfully")
